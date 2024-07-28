@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Union, Optional
 import httpx
 import json
 
@@ -33,6 +33,17 @@ Folder.model_rebuild()
 class FileSystem(BaseModel):
     root: Folder
 
+    @classmethod
+    def parse_obj(cls, obj):
+        def ensure_folder(item):
+            if item.get("type") == "folder":
+                item["children"] = [ensure_folder(child) for child in item.get("children", [])]
+                return Folder(**item)
+            return File(**item)
+        
+        obj["root"] = ensure_folder(obj["root"])
+        return super().parse_obj(obj)
+
 @app.get("/files")
 async def get_files():
     async with httpx.AsyncClient() as client:
@@ -45,22 +56,33 @@ async def get_files():
 async def create_file_or_folder(item: Union[File, Folder], path: str):
     async with httpx.AsyncClient() as client:
         current_system = await client.get(f"{JSON_SERVER_URL}/fileSystem")
-        file_system = FileSystem(**current_system.json())
+        file_system = FileSystem.parse_obj(current_system.json())
 
         folders = path.split("/")
         current_folder = file_system.root
+        print("root: ", file_system.root)
         for folder in folders:
             if folder:
                 current_folder = next((f for f in current_folder.children if f.name == folder and f.type == "folder"), None)
                 if not current_folder:
                     raise HTTPException(status_code=404, detail=f"Folder {folder} not found")
+        
+
+        print("adding item: ", item)
+        print("adding to: ", current_folder)
+        print("type of current_folder: ", type(current_folder))
+        
+        if isinstance(current_folder, File):
+            raise HTTPException(status_code=400, detail="Cannot add children to a file")
 
         current_folder.children.append(item)
+
 
         response = await client.put(f"{JSON_SERVER_URL}/fileSystem", json=file_system.dict())
         if response.status_code == 200:
             return {"message": "Item created successfully"}
         raise HTTPException(status_code=response.status_code, detail="Failed to create item")
+
 
 @app.put("/files/{item_name}")
 async def update_file_or_folder(item_name: str, updated_item: Union[File, Folder], path: str):
