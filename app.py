@@ -4,7 +4,18 @@ from typing import List, Union
 import httpx
 import json
 
+# add cors
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+
+# cors
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 JSON_SERVER_URL = "http://localhost:3000"  # Adjust this if your json-server runs on a different port
 
