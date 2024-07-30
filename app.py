@@ -60,17 +60,11 @@ async def create_file_or_folder(item: Union[File, Folder], path: str):
 
         folders = path.split("/")
         current_folder = file_system.root
-        print("root: ", file_system.root)
         for folder in folders:
             if folder:
                 current_folder = next((f for f in current_folder.children if f.name == folder and f.type == "folder"), None)
                 if not current_folder:
                     raise HTTPException(status_code=404, detail=f"Folder {folder} not found")
-        
-
-        print("adding item: ", item)
-        print("adding to: ", current_folder)
-        print("type of current_folder: ", type(current_folder))
         
         if isinstance(current_folder, File):
             raise HTTPException(status_code=400, detail="Cannot add children to a file")
@@ -87,8 +81,9 @@ async def create_file_or_folder(item: Union[File, Folder], path: str):
 @app.put("/files/{item_name}")
 async def update_file_or_folder(item_name: str, updated_item: Union[File, Folder], path: str):
     async with httpx.AsyncClient() as client:
+        print("update_file_or_folder")
         current_system = await client.get(f"{JSON_SERVER_URL}/fileSystem")
-        file_system = FileSystem(**current_system.json())
+        file_system = FileSystem.parse_obj(current_system.json())
 
         folders = path.split("/")
         current_folder = file_system.root
